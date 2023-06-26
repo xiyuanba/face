@@ -8,10 +8,9 @@ from jina import Document, Executor, Flow, DocumentArray, requests
 
 import torch
 from torchvision.models import resnet50
-
-from keras_vggface.vggface import VGGFace
-from keras_vggface.utils import preprocess_input
 from facenet_pytorch import InceptionResnetV1
+from sklearn.metrics.pairwise import cosine_similarity
+
 class FaceEmbeddingExecutor(Executor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -37,34 +36,24 @@ class FaceEmbeddingExecutor(Executor):
                 # 在同目录下创建一个新的 JPEG 图像文件，命名为 tmp<序号>.jpg
                 filename = f'tmp{i+1}.jpg'
                 cv2.imwrite(filename, face_image)
-                tmp_img = cv2.resize(filename, (224, 224))
-                features1 = self.face_model.predict(np.array([tmp_img]))
-                doc.embedding = features1
+                t1 = cv2.imread(filename)
+                tmp_img = cv2.resize(t1, (160, 160))
+                tmp_img = cv2.cvtColor(tmp_img, cv2.COLOR_BGR2RGB)
+                tmp_img = (tmp_img / 255.).astype(np.float32)
+                with torch.no_grad():
+                    features = self.model(torch.from_numpy(np.array([tmp_img.transpose(2, 0, 1)])))
+                features = features.detach().numpy()
+                doc.embedding = features
                 print(doc.embedding)
                 with self._da:
                     self._da.append(doc)
                     self._da.sync()
 
-
-    @requests(on="/search")
-    def search(self, docs: DocumentArray, **kwargs):
-        print('search')
-        for doc in docs:
-            print(doc.uri)
-        return docs
-class FaceSimilarityExecutor(Executor):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        self.model = resnet50(pretrained=True).to(self.device)
-        self._da = DocumentArray(
-            storage='sqlite', config={'connection': 'example.db', 'table_name': 'face'}
-        )
-
     @requests(on='/search')
     def search(self, docs: DocumentArray, *args, **kwargs):
+        global match_array
+        match_array = DocumentArray()
         for doc in docs:
-            print(doc.uri)
             image = cv2.imread(doc.uri)
             face_locations = face_recognition.face_locations(image)
             doc.content = image  # 设置 Document 的内容为原始图像
@@ -78,35 +67,33 @@ class FaceSimilarityExecutor(Executor):
                 # 在同目录下创建一个新的 JPEG 图像文件，命名为 tmp<序号>.jpg
                 filename = f'tmp{i+1}.jpg'
                 cv2.imwrite(filename, face_image)
+                t1 = cv2.imread(filename)
+                tmp_img = cv2.resize(t1, (160, 160))
+                tmp_img = cv2.cvtColor(tmp_img, cv2.COLOR_BGR2RGB)
+                tmp_img = (tmp_img / 255.).astype(np.float32)
+                with torch.no_grad():
+                    features1 = self.model(torch.from_numpy(np.array([tmp_img.transpose(2, 0, 1)])))
+                features1 = features1.detach().numpy()
 
-                d = (
-                    Document(uri=filename)
-                    .load_uri_to_image_tensor()
-                    .set_image_tensor_shape(shape=(224, 224))
-                    .set_image_tensor_normalization()
-                    .set_image_tensor_channel_axis(-1, 0)
-                )
-                doc.tensor = d.tensor
-                embedding = self.embed_tensor(doc.tensor)
-                doc.embedding = embedding
+                doc.embedding = features1
 
-                doc.match(self._da, limit=20, exclude_self=True, metric='euclidean', use_scipy=True)
-                for match in doc.matches:
-                    print(match.uri, match.scores['euclidean'])
+                for d in self._da:
+                    features1 = doc.embedding
+                    features2 = d.embedding
 
-    def embed_tensor(self, tensor: np.ndarray) -> np.ndarray:
-        # 在这里使用 ResNet50 模型将张量转换为嵌入向量，并返回向量的 numpy 数组形式
-        with torch.no_grad():
-            input_tensor = torch.from_numpy(tensor).unsqueeze(0)
-            output_tensor = self.model(input_tensor)
-            embedding = output_tensor.squeeze().numpy()
-        return embedding
-
-
+                    similarity_matrix = cosine_similarity(features1.reshape(1, -1), features2.reshape(1, -1))
+                    similarity_score = similarity_matrix[0][0]
+                    print(d.uri, similarity_score)
+                    if similarity_score > 0.7:
+                        new_doc = Document()
+                        new_doc.uri = d.uri
+                        # new_doc.scores['cos'] = similarity_score
+                        match_array.append(new_doc)
+                    if len(match_array) > 0:
+                        doc.matches.extend(match_array)
 
 f = Flow().config_gateway(protocol='http', port=12346) \
-    .add(name='face_embedding', uses=FaceEmbeddingExecutor) \
-    .add(name='face_similarity', uses=FaceSimilarityExecutor,needs='face_embedding')
+    .add(name='face_embedding', uses=FaceEmbeddingExecutor)
 
 with f:
     f.block()
