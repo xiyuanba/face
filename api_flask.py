@@ -1,16 +1,17 @@
 from flask import Flask, jsonify,request
 from jina import Client, DocumentArray, Document
+import get_ip
 
-
+ip = get_ip.get_local_ip()
+print(ip)
 app = Flask(__name__)
-
 
 @app.route('/index', methods=['POST'])
 def hello():
     data = request.get_json()
     img_uri = data['img_url']
     name = data['name']
-    host = "http://172.66.1.189:12346"
+    host = f"http://{ip}:12346"
     doc = Document(
         uri=img_uri,
         text=name
@@ -30,11 +31,11 @@ def hello():
     return jsonify(result_list)
 
 
-@app.route('/search', methods=['POST'])
+@app.route('/search', methods=['GET'])
 def search():
     data = request.get_json()
     img_uri = data['img_url']
-    host = "http://172.66.1.189:12346"
+    host = f"http://{ip}:12346"
     doc = Document(
         uri=img_uri
     )
@@ -52,6 +53,7 @@ def search():
             res_text = m.text
             res_uri = m.uri
             res_score = m.scores['cosine'].value
+            print(type(res_score))
             result_dict = {'text': res_text, 'uri': res_uri, 'score': res_score}
             result_list.append(result_dict)
     # for a in ca:
@@ -69,4 +71,4 @@ def search():
     return jsonify(result_list)
 
 if __name__ == '__main__':
-    app.run(host='0.0.0.0')
+    app.run(host='0.0.0.0', port=5001)
