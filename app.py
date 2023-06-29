@@ -9,6 +9,9 @@ import get_ip
 
 ip = get_ip.get_local_ip()
 print(ip)
+current_dir = os.getcwd()
+img_path = current_dir + '/images/'
+img_tmp_path = img_path + '/tmp/'
 
 st.set_page_config(page_title="搜索结果", page_icon=":mag:", layout="wide")
 style = "<style>div.row-widget.stHorizontal{flex-wrap: nowrap !important;}</style>"
@@ -40,7 +43,7 @@ uploaded_file = st.file_uploader("图片", type=["png", "jpg", "jpeg", "gif"])
 if st.button('上传'):
     # 如果已经选择了文件，则进行处理
     if uploaded_file is not None:
-        saved_file_path = save_uploaded_file(uploaded_file, '/home/yingtie/PycharmProjects/face/images/')
+        saved_file_path = save_uploaded_file(uploaded_file, img_path)
         st.success(f"图片已成功保存到 {saved_file_path}")
 
 person_name = st.text_input('标签')
@@ -50,7 +53,7 @@ with col1:
     button1 = st.button("按钮1")
 if st.button('人脸图像建立索引') and person_name is not None:
     # 从指定目录读取上传的文件内容
-    image_uri = '/home/yingtie/PycharmProjects/face/images/' + uploaded_file.name
+    image_uri = img_path + uploaded_file.name
 
     doc = Document(
         uri=image_uri,
@@ -77,7 +80,7 @@ if st.button('人脸图像建立索引') and person_name is not None:
 
 if st.button('证件图像建立索引') and person_name is not None:
     # 从指定目录读取上传的文件内容
-    image_uri = '/home/yingtie/PycharmProjects/face/images/' + uploaded_file.name
+    image_uri = img_path + uploaded_file.name
 
     doc = Document(
         uri=image_uri,
