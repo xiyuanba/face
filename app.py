@@ -47,10 +47,7 @@ if st.button('上传'):
         st.success(f"图片已成功保存到 {saved_file_path}")
 
 person_name = st.text_input('标签')
-col1, col2 = st.columns(2)
-# 在第一列添加按钮
-with col1:
-    button1 = st.button("按钮1")
+
 if st.button('人脸图像建立索引') and person_name is not None:
     # 从指定目录读取上传的文件内容
     image_uri = img_path + uploaded_file.name
