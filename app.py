@@ -1,17 +1,17 @@
 import streamlit as st
 from PIL import Image
 from jina import Client, DocumentArray, Document
-from pprint import pprint
 import os
 import shutil
 import tempfile
-import get_ip
+import utils
 
-ip = get_ip.get_local_ip()
+ip = utils.get_local_ip()
 print(ip)
-current_dir = os.getcwd()
-img_path = current_dir + '/images/'
-img_tmp_path = img_path + '/tmp/'
+img_path = utils.get_images_path()
+print(img_path)
+img_tmp_path = utils.get_tmp_images_path()
+print(img_tmp_path)
 
 st.set_page_config(page_title="搜索结果", page_icon=":mag:", layout="wide")
 style = "<style>div.row-widget.stHorizontal{flex-wrap: nowrap !important;}</style>"
@@ -50,8 +50,7 @@ person_name = st.text_input('标签')
 
 if st.button('人脸图像建立索引') and person_name is not None:
     # 从指定目录读取上传的文件内容
-    image_uri = img_path + uploaded_file.name
-
+    image_uri = os.path.join(img_path, uploaded_file.name)
     doc = Document(
         uri=image_uri,
         text=person_name
@@ -61,7 +60,7 @@ if st.button('人脸图像建立索引') and person_name is not None:
     docs.append(doc)
     docs.summary()
     # 发送 POST 请求并获取响应数据
-    url = f"http://{ip}:12346"
+    url = f"http://{ip}:8401"
     c = Client(host=url)
     da = c.post(on='/', inputs=docs, show_progress=True, timeout=3600)
     # text = uploaded_file.read().decode('utf-8')
@@ -77,7 +76,7 @@ if st.button('人脸图像建立索引') and person_name is not None:
 
 if st.button('证件图像建立索引') and person_name is not None:
     # 从指定目录读取上传的文件内容
-    image_uri = img_path + uploaded_file.name
+    image_uri = os.path.join(img_path, uploaded_file.name)
 
     doc = Document(
         uri=image_uri,
@@ -88,7 +87,7 @@ if st.button('证件图像建立索引') and person_name is not None:
     docs.append(doc)
     docs.summary()
     # 发送 POST 请求并获取响应数据
-    url = f"http://{ip}:12346"
+    url = f"http://{ip}:8401"
     c = Client(host=url)
     da = c.post(on='/index_cred', inputs=docs, show_progress=True, timeout=3600)
     # text = uploaded_file.read().decode('utf-8')
@@ -106,10 +105,10 @@ uploaded_file_search = st.file_uploader("请上传需要搜索的图片", type=[
 if st.button('人脸库匹配') and uploaded_file_search is not None:
     # 如果已经选择了文件，则进行处理
     if uploaded_file_search is not None:
-        tmp_file_path = save_uploaded_file(uploaded_file_search, '/home/yingtie/PycharmProjects/face/tmp/')
+        tmp_file_path = save_uploaded_file(uploaded_file_search, img_tmp_path)
         st.success(f"图片已成功保存到 {tmp_file_path}")
-    image2_uri = '/home/yingtie/PycharmProjects/face/tmp/' + uploaded_file_search.name
-    url = f"http://{ip}:12346"
+    image2_uri = os.path.join(img_tmp_path, uploaded_file_search.name)
+    url = f"http://{ip}:8401"
     c = Client(host=url)
     da_search = DocumentArray()
     # t1 = Document(text=query_keyword)
@@ -162,10 +161,10 @@ if st.button('人脸库匹配') and uploaded_file_search is not None:
 if st.button('证件库匹配') and uploaded_file_search is not None:
     # 如果已经选择了文件，则进行处理
     if uploaded_file_search is not None:
-        tmp_file_path = save_uploaded_file(uploaded_file_search, '/home/yingtie/PycharmProjects/face/tmp/')
+        tmp_file_path = save_uploaded_file(uploaded_file_search, img_tmp_path)
         st.success(f"图片已成功保存到 {tmp_file_path}")
-    image2_uri = '/home/yingtie/PycharmProjects/face/tmp/' + uploaded_file_search.name
-    url = f"http://{ip}:12346"
+    image2_uri = os.path.join(img_tmp_path, uploaded_file_search.name)
+    url = f"http://{ip}:8401"
     c = Client(host=url)
     da_search = DocumentArray()
     # t1 = Document(text=query_keyword)

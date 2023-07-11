@@ -1,7 +1,7 @@
 import netifaces as ni
 import os
 
-storage_dir = '/opt/third/etsai_data'
+storage_dir = '/opt/third/.local/etsai'
 tmp_images_path = '/opt/third/etsai/tmp'
 
 
@@ -36,8 +36,7 @@ def get_local_ip():
 
 def get_storage_path():
     # 获取数据文件路径
-    file_path = os.path.join(storage_dir, 'example.db')
-    return file_path
+    return storage_dir
 
 
 def get_images_path():
