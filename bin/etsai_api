@@ -1,0 +1,20 @@
+#!/bin/bash
+
+: ${THIRD_ROOT:=/opt/third}
+
+# set PATH
+for d in etsai/python3.8; do
+    export PATH=${THIRD_ROOT}/$d/bin:$PATH
+done
+echo $PATH | tr : '\n'
+
+# set PYTHON PATH
+for p in python3.8 etsai/python3.8/lib/python3.8; do
+    export PYTHONPATH=${THIRD_ROOT}/$p:$PYTHONPATH
+    export PYTHONPATH=${THIRD_ROOT}/$p/site-packages:$PYTHONPATH
+    export PYTHONPATH=${THIRD_ROOT}/$p/dist-packages:$PYTHONPATH
+done
+echo $PYTHONPATH | tr : '\n'
+which python
+#exec python $THIRD_ROOT/etsai/flow.py "$@"
+exec python $THIRD_ROOT/etsai/api_flask.py
