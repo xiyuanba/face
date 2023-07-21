@@ -16,10 +16,10 @@ fi
 
 # 根据命令行参数执行相应的操作
 if [ "$1" = "download" ]; then
-  ossutil -c /home/yingtie/.ossutilconfig cp oss://etsme-config/config/cookie/releases/packages.json ./packages.json
+  ossutil -c /root/.ossutilconfig cp oss://etsme-config/config/cookie/releases/packages.json ./packages.json
   echo "Download completed!"
 elif [ "$1" = "upload" ]; then
-  ossutil -c /home/yingtie/.ossutilconfig cp ./packages.json oss://etsme-config/config/cookie/releases/packages.json
+  ossutil -c /root/.ossutilconfig cp ./packages.json oss://etsme-config/config/cookie/releases/packages.json
   echo "Upload completed!"
 else
   usage

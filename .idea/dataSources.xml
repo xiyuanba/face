@@ -1,19 +1,24 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project version="4">
   <component name="DataSourceManagerImpl" format="xml" multifile-model="true">
-    <data-source source="LOCAL" name="face" uuid="698da0b4-d9d8-4d7a-809e-bdd8327e9d05">
+    <data-source source="LOCAL" name="face" uuid="81bdd708-6300-492a-9547-4033a30d085e">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
       <jdbc-url>jdbc:sqlite:/opt/third/.local/etsai/face</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
     </data-source>
-    <data-source source="LOCAL" name="cred" uuid="1c192e97-1c68-44ff-8ae1-b87820a6b356">
+    <data-source source="LOCAL" name="example" uuid="189872c2-ab0e-4a20-9a6a-cbcc6fc4088a">
       <driver-ref>sqlite.xerial</driver-ref>
       <synchronize>true</synchronize>
       <jdbc-driver>org.sqlite.JDBC</jdbc-driver>
-      <jdbc-url>jdbc:sqlite:/opt/third/.local/etsai/cred</jdbc-url>
+      <jdbc-url>jdbc:sqlite:$PROJECT_DIR$/example.db</jdbc-url>
       <working-dir>$ProjectFileDir$</working-dir>
+      <libraries>
+        <library>
+          <url>file://$APPLICATION_CONFIG_DIR$/jdbc-drivers/Xerial SQLiteJDBC/3.40.1/org/xerial/sqlite-jdbc/3.40.1.0/sqlite-jdbc-3.40.1.0.jar</url>
+        </library>
+      </libraries>
     </data-source>
   </component>
 </project>

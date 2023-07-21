@@ -3,26 +3,36 @@
 : ${THIRD_ROOT:=/opt/third}
 
 # set PATH
-for d in etsai/python3.8; do
+for d in etsai_python/python3.8; do
     export PATH=${THIRD_ROOT}/$d/bin:$PATH
 done
-echo $PATH | tr : '\n'
+#echo $PATH | tr : '\n'
 
 # set PYTHON PATH
-for p in python3.8 etsai/python3.8/lib/python3.8; do
+for p in etsai_python/python3.8/lib/python3.8; do
     export PYTHONPATH=${THIRD_ROOT}/$p:$PYTHONPATH
     export PYTHONPATH=${THIRD_ROOT}/$p/site-packages:$PYTHONPATH
     export PYTHONPATH=${THIRD_ROOT}/$p/dist-packages:$PYTHONPATH
 done
-echo $PYTHONPATH | tr : '\n'
-which python
+# echo $PYTHONPATH | tr : '\n'
 
 softlink_path="/home/etsme/.cache/torch"
-target_path="/opt/third/etsai/torch"
-
+target_path="/opt/third/etsai_torch/torch"
+rm -rf $softlink_path
 if [ ! -L "$softlink_path" ]; then
   ln -s "$target_path" "$softlink_path"
 fi
 
+if [ ! -d "/mnt/md0/log/services/etsai" ]; then
+  mkdir -p /mnt/md0/log/services/etsai
+fi
+
+if [ ! -d "/opt/third/.local/etsai/images" ]; then
+  mkdir -p /opt/third/.local/etsai/images
+fi
+
+which python
 #exec python $THIRD_ROOT/etsai/flow.py "$@"
+
+env > /tmp/auto.env
 exec python $THIRD_ROOT/etsai/flow.py

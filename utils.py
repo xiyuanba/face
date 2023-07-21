@@ -47,3 +47,4 @@ def get_images_path():
 
 def get_tmp_images_path():
     return tmp_images_path
+

@@ -109,6 +109,32 @@ def search_face():
     return jsonify(result_total_list)
 
 
+@app.route('/update', methods=['PUT'])
+def update_face():
+    data = request.get_json()
+    doc_id = data['doc_id']
+    name = data['name']
+    host = f"http://{ip}:8401"
+    result_total_list = []
+    # 发送 POST 请求并获取响应数据
+    c = Client(host=host)
+    doc = Document(
+        id=doc_id,
+        text=name
+    )
+    docs = DocumentArray()
+    docs.append(doc)
+    result_list = []
+    matches = c.post(on='/update', inputs=docs, show_progress=True, timeout=360000)
+    for match in matches:
+        for m in match.matches:
+            print(f"Match with URI {m.tags['result']}")
+            res_result = m.tags['result']
+            result_dict = {'result': res_result}
+            result_list.append(result_dict)
+    result_total_list.append(result_list)
+    return jsonify(result_total_list)
+
 @app.route('/index_cred', methods=['POST'])
 def index_cred():
     data = request.get_json()

@@ -46,13 +46,3 @@
 │       └── 20180402-114759-vggface2.pt
 └── utils.py                      工具类
 ```
-### 提供的接口
-```shell
-为人脸图片创建索引
-curl --location 'http://localhost:5001/index' \
---header 'Content-Type: application/json' \
---data '{
-    "img_url": "/path/to/image.jpg",
-    "name": "some name"
-}'
-```

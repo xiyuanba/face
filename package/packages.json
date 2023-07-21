@@ -1,17 +1,38 @@
 {
   "etsget": {
     "name": "etsget",
-    "version": "1.12",
+    "version": "1.13",
     "arch": "aarch64",
     "author": "everywang",
     "depends": [
       "python>=3.8",
-      "you-get"
+      "you-get",
+      "node",
+      "postlight",
+      "ffmpeg"
     ]
   },
-    "etsai": {
+  "etsai": {
     "name": "etsai",
-    "version": "1.2",
+    "version": "1.8",
+    "arch": "aarch64",
+    "author": "yingtie",
+    "depends": [
+      "python>=3.8"
+    ]
+  },
+  "etsai_python": {
+    "name": "etsai_python",
+    "version": "1.0",
+    "arch": "aarch64",
+    "author": "yingtie",
+    "depends": [
+      "python>=3.8"
+    ]
+  },
+  "etsai_torch": {
+    "name": "etsai_torch",
+    "version": "1.0",
     "arch": "aarch64",
     "author": "yingtie",
     "depends": [
