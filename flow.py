@@ -20,7 +20,10 @@ from transformers import BlipProcessor, BlipForConditionalGeneration, AutoModelF
 from text2vec import SentenceModel, EncoderType
 import utils
 
-logger = logging.getLogger(__name__)
+import torchvision.models as models
+import torchvision.transforms as transforms
+
+logger = logging.getLogger('flow')
 logger.setLevel(logging.INFO)
 formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 file_handler = logging.FileHandler('/mnt/md0/log/services/etsai/flow.log')
@@ -30,9 +33,93 @@ logger.addHandler(file_handler)
 storage = utils.get_storage_path()
 face_storage = os.path.join(storage, "face")
 cred_storage = os.path.join(storage, "cred")
+caption_storage = os.path.join(storage, "caption")
+picture_storage = os.path.join(storage, "picture")
 print(f'face_storage:', face_storage)
 print(f'cred_storage:', cred_storage)
+print(f'caption_storage:', caption_storage)
 img_tmp_path = utils.get_tmp_images_path()
+
+
+class PictureEmbedding(Executor):
+    print("in ImageEmbedding")
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model = InceptionResnetV1(pretrained='vggface2').eval()
+        self._da = DocumentArray(
+            storage='sqlite', config={'connection': picture_storage, 'table_name': 'picture'}
+        )
+        self.resnet = models.wide_resnet50_2(pretrained=True)
+        # 将模型设为评估模式
+        self.resnet.eval()
+        self.preprocess = transforms.Compose([
+            transforms.Resize(256),
+            transforms.CenterCrop(224),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+        ])
+    @requests(on='/picture_index')
+    def encode(self, docs: DocumentArray, *args, **kwargs):
+        print("in Picture encode")
+        # 创建一个 Document 对象并设置其属性值
+        for doc in docs:
+            logger.info(f'encode received person name: {doc.text}')
+            image = Image.open(doc.uri).convert('RGB')
+                # 将图像转换为灰度图像
+            image_tensor = self.preprocess(image)
+            image_tensor = torch.unsqueeze(image_tensor, 0)  # 添加 batch 维度
+                # 使用 ResNet-50 提取图像的特征向量
+            with torch.no_grad():
+                features = self.resnet(image_tensor)
+            doc.embedding = features
+            doc.tags['type'] = 'picture'
+            doc.tags['face_num'] = 0
+                # 日志记录文档摘要等信息
+            logger.info(f'Received person name: {doc.text}')
+            logger.info(f'Document summary: {doc.summary()}')
+
+            with self._da:
+                # 检查是否存在相同的 doc_id，如果存在则跳过重复插入
+                if not any(d.id == doc.id for d in self._da):
+                    self._da.append(doc)
+                else:
+                    print(f'Document with doc_id={doc.id} already exists in the index. Skipping insertion.')
+                    logger.info(f'Document with doc_id={doc.id} already exists in the index. Skipping insertion.')
+                self._da.sync()
+
+    @requests(on='/picture_search')
+    def search(self, docs: DocumentArray, *args, **kwargs):
+        for doc in docs:
+            logger.info(f'search received person name: {doc.text}')
+            image_path = doc.uri
+            image = Image.open(image_path).convert('RGB')
+            image_tensor = self.preprocess(image)
+            image_tensor = torch.unsqueeze(image_tensor, 0)  # 添加 batch 维度
+            # 使用 ResNet-50 提取图像的特征向量
+            with torch.no_grad():
+                features = self.resnet(image_tensor)
+            doc.embedding = features
+
+            match_array = DocumentArray().empty()  # 清空匹配结果
+            for d in self._da:
+                features1 = doc.embedding
+                features2 = d.embedding
+                similarity_matrix = cosine_similarity(features1.reshape(1, -1), features2.reshape(1, -1))
+                similarity_score = similarity_matrix[0][0]
+                logger.info(f'[picture]Similarity score for {d.uri}: {similarity_score}')
+                if similarity_score > 0.7:
+                    match_doc = Document()
+                    match_doc.id = d.id
+                    match_doc.uri = d.uri
+                    match_doc.scores['cosine'] = NamedScore(value=float(similarity_score))
+                    match_doc.text = d.text
+                    match_doc.tags['type'] = d.tags['type']
+                    match_doc.tags['face_num'] = d.tags['face_num']
+                    match_array.append(match_doc)
+            doc.matches.extend(match_array)
+            doc.summary()
+        return docs
 
 
 class FaceEmbeddingExecutor(Executor):
@@ -82,7 +169,7 @@ class FaceEmbeddingExecutor(Executor):
                         torch.from_numpy(np.array([tmp_img.transpose(2, 0, 1)])))
                 features = features.detach().numpy()
                 doc.embedding = features
-
+                doc.tags['type'] = 'face'
                 # 日志记录文档摘要等信息
                 logger.info(f'Received person name: {doc.text}')
                 logger.info(f'Document summary: {doc.summary()}')
@@ -98,6 +185,7 @@ class FaceEmbeddingExecutor(Executor):
 
     @requests(on='/search')
     def search(self, docs: DocumentArray, *args, **kwargs):
+        docs.summary()
         for doc in docs:
             logger.info(f'search received person name: {doc.text}')
 
@@ -138,17 +226,19 @@ class FaceEmbeddingExecutor(Executor):
                     features2 = d.embedding
                     similarity_matrix = cosine_similarity(features1.reshape(1, -1), features2.reshape(1, -1))
                     similarity_score = similarity_matrix[0][0]
-                    logger.info(f'Similarity score for {d.uri}: {similarity_score}')
+                    logger.info(f'[face]Similarity score for {d.uri}: {similarity_score}')
                     if similarity_score > 0.7:
                         match_doc = Document()
                         match_doc.id = d.id
                         match_doc.uri = d.uri
                         match_doc.scores['cosine'] = NamedScore(value=float(similarity_score))
                         match_doc.tags['face_num'] = face_num
+                        match_doc.tags['type'] = d.tags['type']
                         match_doc.text = d.text
                         match_array.append(match_doc)
 
                 doc.matches.extend(match_array)
+
             doc.summary()
             return docs
 
@@ -271,21 +361,23 @@ class CredEmbeddingExecutor(Executor):
 class FaceUpdate(Executor):
     print("in FaceUpdate")
     logger.info(f'FaceUpdate')
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._da = DocumentArray(
             storage='sqlite', config={'connection': face_storage, 'table_name': 'face'}
         )
-
-    @requests(on='/update')
+        self._da2 = DocumentArray(
+            storage='sqlite', config={'connection': picture_storage, 'table_name': 'picture'}
+        )
+    @requests(on='/update_face')
     def search(self, docs: DocumentArray, *args, **kwargs):
-        print("into update state")
+        print("into update face state")
 
         match_array = DocumentArray().empty()
         for doc in docs:
             logger.info(f'FaceUpdate received person name: {doc.text}')
             logger.info(f'FaceUpdate received doc_id: {doc.id}')
-
 
             if doc.id not in self._da:
                 logger.info(f'doc_id not found in self._da')
@@ -309,6 +401,37 @@ class FaceUpdate(Executor):
             doc.summary()
             return docs
 
+    @requests(on='/update_picture')
+    def search(self, docs: DocumentArray, *args, **kwargs):
+        print("into update picture state")
+
+        match_array = DocumentArray().empty()
+        for doc in docs:
+            logger.info(f'picture update received person name: {doc.text}')
+            logger.info(f'picture update received doc_id: {doc.id}')
+
+            if doc.id not in self._da2:
+                logger.info(f'doc_id not found in self._da')
+                match_doc = Document()
+                match_doc.tags['result'] = 'fail'
+                match_array.append(match_doc)
+                doc.matches.extend(match_array)
+                return docs
+            d = self._da2[doc.id]
+            new_doc = Document()
+            new_doc.id = doc.id
+            new_doc.text = doc.text
+            new_doc.embedding = d.embedding
+            new_doc.uri = d.uri
+            self._da2[doc.id] = new_doc
+            self._da2.sync()
+            match_doc = Document()
+            match_doc.tags['result'] = 'success'
+            match_array.append(match_doc)
+            doc.matches.extend(match_array)
+            doc.summary()
+            return docs
+
 class CaptionEnglish(Executor):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -317,6 +440,7 @@ class CaptionEnglish(Executor):
 
     @requests(on="/img_caption")
     def caption(self, docs: DocumentArray, **kwargs):
+        logger.info(f'caption received docs: {docs}')
         for doc in tqdm(docs):
             img_path = doc.uri
             print(img_path)
@@ -327,10 +451,12 @@ class CaptionEnglish(Executor):
             out = self.model.generate(**inputs)
             print(self.processor.decode(out[0], skip_special_tokens=True))
             doc.text = self.processor.decode(out[0], skip_special_tokens=True)
+            logger.info(f'transform path {doc.uri},furl {doc.tags["furl"]} to caption with english: {doc.text}')
 
     @requests(on="/img_search")
     def search(self, docs: DocumentArray, **kwargs):
         return docs
+
 
 class EnglishToChineseTranslator(Executor):
     def __init__(self, *args, **kwargs):
@@ -348,15 +474,15 @@ class EnglishToChineseTranslator(Executor):
             # out_key = 'generated_text'
             translated_text = self.translation(doc.text, max_length=400)[0][out_key]
 
-
-
             doc.text = translated_text
+            logger.info(f'transform path {doc.uri},furl {doc.tags["furl"]} to caption with chinese: {doc.text}')
             print(doc.summary())
             print(doc.text)
 
     @requests(on="/img_search")
     def search(self, docs: DocumentArray, **kwargs):
         return docs
+
 
 class ChineseEncoder(Executor):
     def __init__(self, *args, **kwargs):
@@ -365,7 +491,7 @@ class ChineseEncoder(Executor):
         self._model = SentenceModel("shibing624/text2vec-base-chinese", encoder_type=EncoderType.FIRST_LAST_AVG,
                                     device=device)
         self._da = DocumentArray(
-            storage='sqlite', config={'connection': 'example.db', 'table_name': 'images'}
+            storage='sqlite', config={'connection': caption_storage, 'table_name': 'caption'}
         )
 
     @requests(on='/img_caption')
@@ -380,6 +506,7 @@ class ChineseEncoder(Executor):
                 self._da.append(doc)
                 self._da.sync()
                 print(f"Length of da_encode is {len(self._da)}")
+                logger.info(f'index path {doc.uri},furl {doc.tags["furl"]} to caption with chinese: {doc.text} to db')
         print(f"Length of da_encode is {len(self._da)}")
 
     @requests(on='/img_search')
@@ -395,17 +522,30 @@ class ChineseEncoder(Executor):
             print(type(doc.matches[:, ('scores__cos')]))
             print(doc.matches[:, ('text', 'uri', 'scores__cos')])
             print(doc.matches[0].scores['cos'])
+            logger.info(f"source path {doc.uri},furl {doc.tags.get('furl')} match with chinese: {doc.text}")
+            for m in match.matches:
+                logger.info(
+                    f"match path {m.uri},furl {m.tags.get('furl')},text {m.text} with similarity {m.scores['cos']}")
 
 
+# f = Flow().config_gateway(protocol='http', port=8401) \
+#     .add(name='english_to_chinese', uses=EnglishToChineseTranslator) \
+#     .add(name='chinese_encode', uses=ChineseEncoder, needs='english_to_chinese')
 
+# f = Flow().config_gateway(protocol='http', port=8401) \
+#     .add(name='img_caption', uses=CaptionEnglish) \
+#     .add(name='english_to_chinese', uses=EnglishToChineseTranslator, needs='img_caption') \
+#     .add(name='chinese_encode', uses=ChineseEncoder, needs='english_to_chinese')
 
 f = Flow().config_gateway(protocol='http', port=8401) \
-    .add(name='face_embedding', uses=FaceEmbeddingExecutor) \
-    .add(name='cred_embedding', uses=CredEmbeddingExecutor) \
-    .add(name='face_update', uses=FaceUpdate) \
-    .add(name='img_caption', uses=CaptionEnglish) \
-    .add(name='english_to_chinese', uses=EnglishToChineseTranslator, needs='img_caption') \
-    .add(name='chinese_encode', uses=ChineseEncoder, needs='english_to_chinese')
+    .add(name='picture_embedding', uses=PictureEmbedding) \
+    .add(name='face_embedding', uses=FaceEmbeddingExecutor)
+    # .add(name='cred_embedding', uses=CredEmbeddingExecutor)
+#     .add(name='face_update', uses=FaceUpdate) \
+#     .add(name='img_caption', uses=CaptionEnglish) \
+#     .add(name='english_to_chinese', uses=EnglishToChineseTranslator, needs='img_caption') \
+#     .add(name='chinese_encode', uses=ChineseEncoder, needs='english_to_chinese')
+
 
 with f:
     f.block()

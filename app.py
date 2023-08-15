@@ -101,6 +101,33 @@ if st.button('证件图像建立索引') and person_name is not None:
         st.image(img, caption=uploaded_file.name)
         st.write("图中显示为：", d.text)
 
+if st.button('解析图片为自然语言'):
+    # 从指定目录读取上传的文件内容
+    image_uri = os.path.join(img_path, uploaded_file.name)
+
+    doc = Document(
+        uri=image_uri,
+        tags={'furl': 'default'}
+    )
+    doc.summary()
+    docs = DocumentArray()
+    docs.append(doc)
+    docs.summary()
+    # 发送 POST 请求并获取响应数据
+    url = f"http://{ip}:8401"
+    c = Client(host=url)
+    da = c.post(on='/img_caption', inputs=docs, show_progress=True, timeout=3600)
+    # text = uploaded_file.read().decode('utf-8')
+    img = Image.open(image_uri)
+    # 缩放图像大小为原来的一半
+    width, height = img.size
+    new_width, new_height = int(width / 2), int(height / 2)
+    img = img.resize((new_width, new_height))
+    da.summary()
+    for d in da:
+        st.image(img, caption=uploaded_file.name)
+        st.write("图中显示为：", d.text)
+
 uploaded_file_search = st.file_uploader("请上传需要搜索的图片", type=["png", "jpg", "jpeg", "gif"])
 if st.button('人脸库匹配') and uploaded_file_search is not None:
     # 如果已经选择了文件，则进行处理
@@ -213,3 +240,47 @@ if st.button('证件库匹配') and uploaded_file_search is not None:
             with cols[col_index]:
                 st.image(img, caption=match.text, use_column_width=True)
                 st.write("余弦相似度: ", match.scores['cosine'].value)
+input_text = st.text_input('请输入文本进行图片搜索')
+if st.button('文本搜图') and input_text is not None:
+
+    url = f"http://{ip}:8401"
+    c = Client(host=url)
+    da_search = DocumentArray()
+    # t1 = Document(text=query_keyword)
+    t1 = Document(
+        text=input_text
+    )
+    da_search.append(t1)
+    print(da_search)
+    matches = c.post('/img_search', inputs=da_search, limit=6, show_progress=True)
+
+    # 显示输入的图片及相关信息
+    if len(matches) == 0:
+        st.warning("没有找到与该图片相似的结果。")
+        col_input = st.columns(1)[0]
+        with col_input:
+            st.header("输入的文本")
+            st.write(input_text)
+    else:
+        col_input = st.columns(1)[0]
+        with col_input:
+            st.header("输入的文本")
+            st.write(input_text)
+
+        # 显示匹配的图片及相关信息
+        st.header("匹配到")
+        cols = st.columns(5)
+        for i, match in enumerate(matches[0].matches):
+            # 打开图片并调整大小
+            img = Image.open(match.uri)
+            width, height = img.size
+            new_width, new_height = int(width / 4), int(height / 4)
+            img = img.resize((new_width, new_height))
+
+            # 计算当前图片应该放在哪一列
+            col_index = i % 5
+
+            # 在对应的列中显示图片和相关信息
+            with cols[col_index]:
+                st.image(img, caption=match.text, use_column_width=True)
+                st.write("余弦相似度: ", 1-match.scores['cos'].value)
